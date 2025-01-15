@@ -1,30 +1,59 @@
 import time
 import logging
 
+from aiogram import Bot, Dispatcher, types, Router, BaseMiddleware
+import logging
+
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
+
+from aiogram import BaseMiddleware
+from aiogram.types import Message
+from typing import Callable, Dict, Any, Awaitable
+from aiogram.fsm.storage.memory import MemoryStorage
+
+from commands import handlers
 
 #Enter the token here
-TOKEN = ':)'
+TOKEN = ''
+ADMIN_ID = 5895319703
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(bot=bot)
 
-MSG = 'Do you studied English today, {}?'
+# Middleware для логирования сообщений
+class LoggingMiddleware(BaseMiddleware):
+    async def __call__(self, handler: Callable[[Message, Dict[str, Any]], Awaitable[Any]], event: Message, data: Dict[str, Any]) -> Any:
+        logger.info(f"Получено сообщение от {event.from_user.id}: {event.text}")
+        return await handler(event, data)
 
-@dp.message(Command('start'))
-async def start_handler(message: types.Message):
-    user_id = message.from_user.id
-    user_name = message.from_user.first_name
-    user_full_name = message.from_user.full_name
-    logging.info(f'{user_id=} {user_full_name=} {time.asctime()=}')
 
-    await message.reply(f'Hello, {user_full_name}')
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-    for i in range(7):
-        time.sleep(60*60*24)
-        await bot.send_message(user_id, MSG.format(user_name))
 
+# Инициализация хранилища состояний и диспетчера
+storage = MemoryStorage()
+bot = Bot(token=TOKEN)  # Создание объекта бота с токеном
+dp = Dispatcher(storage=storage)  # Создание объекта диспетчера для маршрутизации сообщений
+dp.include_router(handlers.router)  # Создание маршрутизатора для обработки команд
+
+# Регистрация middleware
+dp.message.middleware.register(LoggingMiddleware())
+
+
+
+# Запуск бота
+async def main():
+    await bot.delete_webhook()
+    while True:
+        try:
+            await dp.start_polling(bot)
+        except Exception as e:
+            logger.error(f"Ошибка при запуске бота: {e}")
+            await asyncio.sleep(5)
 
 if __name__ == '__main__':
-    dp.start_polling()
+    import asyncio
+
+    asyncio.run(main())  # Запускаем основную функцию
